@@ -18,12 +18,9 @@ module.exports = {
     ],
     run: async (bot, interaction) => {
         try {
-            await interaction.deferReply({ 
-            });
+            await interaction.deferReply();
 
-            const rawData = await fs.readFile(path, 'utf8').catch(() => { 
-                throw new Error('Veritabanı okunamadı') 
-            });
+            const rawData = await fs.readFile(path, 'utf8');
             const db = JSON.parse(rawData || '{}');
             db.deliveries = db.deliveries || {};
 
@@ -33,12 +30,12 @@ module.exports = {
                 throw new Error('Geçersiz teslimat kodu');
             }
 
+            if (!deliveryData.guildId) throw new Error('Geçersiz sunucu ID');
+            if (typeof deliveryData.boostCount !== 'number') throw new Error('Geçersiz boost sayısı');
+
             const user = interaction.user;
             if (deliveryData.used) throw new Error('Bu boost kodu zaten kullanılmış');
             if (deliveryData.userId !== user.id) throw new Error('Bu boost kodu size ait değil');
-            if (typeof deliveryData.boostCount !== 'number') throw new Error('Geçersiz boost sayısı');
-            const createdAtDate = new Date(deliveryData.createdAt);
-            if (isNaN(createdAtDate)) throw new Error('Geçersiz tarih formatı');
 
             db.deliveries[key] = { 
                 ...deliveryData, 
@@ -48,136 +45,89 @@ module.exports = {
             };
             await fs.writeFile(path, JSON.stringify(db, null, 2));
 
-            const embed = new Discord.EmbedBuilder()
-                .setAuthor({
-                    name: `${user.username} - Boost İşlemi Başarılı`,
-                    iconURL: user.displayAvatarURL({ dynamic: true })
-                })
-                .setTitle('🚀 Boost Sistemi')
-                .setDescription(`> 🎉 Tebrikler! Boost kodunuz başarıyla kullanıldı.`)
-                .addFields(
-                    {
-                        name: '🎫 __Boost Detayları__',
-                        value: [
-                            `\`⌁\` **Kod:** \`${key}\``,
-                            `\`⌁\` **Boost Sayısı:** \`${deliveryData.boostCount}x\` boost`,
-                            `\`⌁\` **Oluşturulma:** <t:${Math.floor(createdAtDate / 1000)}:R>`
-                        ].join('\n')
-                    },
-                    {
-                        name: '📋 __İşlem Bilgileri__',
-                        value: [
-                            `\`⌁\` **Kullanıcı:** ${user.toString()} (${user.id})`,
-                            `\`⌁\` **Durum:** ✅ Boost Başlatıldı`,
-                            `\`⌁\` **Tarih:** <t:${Math.floor(Date.now() / 1000)}:F>`
-                        ].join('\n')
-                    }
-                )
-                .setThumbnail('https://i.imgur.com/YjBfT5a.png')
-                .setColor('#2ecc71')
-                .setFooter({ 
-                    text: '🌟 Neptune Developments - Otomatik Boost Sistemi', 
-                    iconURL: bot.user.displayAvatarURL() 
-                })
-                .setTimestamp();
-
-            await interaction.editReply({ 
-                content: `### ✨ [Neptune Developments] Boost İşlemi Başlatıldı!\n> Boost kodunuz onaylandı ve işlem başlatılıyor.`,
-                embeds: [embed] 
-            });
-
-            console.log(`[Neptune Developments] Boost Başladı: ${deliveryData.boostCount}x boost yapılacak...`);
-            
-            const successfulAdds = await startDelivery(deliveryData);
-            
-            // Calculate how many tokens we need (each token boosts twice)
+            const tokenContent = await fs.readFile('./tokens/tokenler.txt', 'utf8');
+            const allTokens = tokenContent.split(/\r?\n/).filter(t => t.trim().length > 0);
             const neededTokenCount = Math.ceil(deliveryData.boostCount / 2);
-            
-            // Get tokens for boosting
-            const tokens = await fs.readFile('./tokens/tokenler.txt', 'utf8')
-                .then(data => data.split(/\r?\n/)
-                    .filter(t => t.length > 0)
-                    .slice(0, neededTokenCount));
+            const tokensToUse = allTokens.slice(0, neededTokenCount);
+
+            const successfulAdds = await startDelivery(deliveryData, tokensToUse);
 
             let totalBoosts = 0;
+            const successfulBoosts = [];
 
-            // Each token boosts twice
-            for (const token of tokens) {
-                const boostResult = await boostServer(token, deliveryData.guildId);
-                totalBoosts += boostResult;
-                console.log(`[Neptune Developments] Token Boost Progress: ${totalBoosts}/${deliveryData.boostCount}`);
-                await new Promise(r => setTimeout(r, 1000));
+            for (const [index, token] of tokensToUse.entries()) {
+                try {
+
+                    const slotsResponse = await fetch(
+                        'https://discord.com/api/v9/users/@me/guilds/premium/subscription-slots',
+                        {
+                            headers: { Authorization: token }
+                        }
+                    );
+
+                    if (!slotsResponse.ok) {
+                        console.log(`[${index + 1}/${tokensToUse.length}] Slot getirme başarısız oldu: ${slotsResponse.status}`);
+                        continue;
+                    }
+
+                    const slots = await slotsResponse.json();
+                    const availableSlots = slots.filter(slot => 
+                        !slot.canceled && 
+                        (!slot.cooldown_ends_at || new Date(slot.cooldown_ends_at) < new Date())
+                    );
+
+                    if (availableSlots.length < 2) {
+                        console.log(`[${index + 1}/${tokensToUse.length}] Yetersiz yuva: ${availableSlots.length}`);
+                        continue;
+                    }
+
+                    for (let i = 0; i < 2 && totalBoosts < deliveryData.boostCount; i++) {
+                        const boostResponse = await fetch(
+                            `https://discord.com/api/v9/guilds/${deliveryData.guildId}/premium/subscriptions`,
+                            {
+                                method: 'PUT',
+                                headers: { 
+                                    Authorization: token,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    user_premium_guild_subscription_slot_ids: [availableSlots[i].id]
+                                })
+                            }
+                        );
+
+                        if (boostResponse.status === 201) {
+                            totalBoosts++;
+                            successfulBoosts.push(token);
+                            console.log(`[${index + 1}/${tokensToUse.length}] Boost ${totalBoosts}/${deliveryData.boostCount} basarili`);
+                        } else {
+                            console.log(`[${index + 1}/${tokensToUse.length}] Boost hata: ${boostResponse.status}`);
+                        }
+
+                        await new Promise(resolve => setTimeout(resolve, 1200));
+                    }
+                } catch (error) {
+                    console.error(`[${index + 1}/${tokensToUse.length}] Hata:`, error.message);
+                }
             }
 
             const completionEmbed = new Discord.EmbedBuilder()
-                .setTitle('✅ Boost Tamamlandı')
+                .setTitle('✅ Boost İşlemi Tamamlandı')
                 .setDescription([
-                    `> 🎉 ${successfulAdds}/${neededTokenCount} token başarıyla katıldı.`,
-                    `> 🚀 ${totalBoosts}/${deliveryData.boostCount} boost başarıyla yapıldı.`
+                    `🎉 Toplam **${totalBoosts}/${deliveryData.boostCount}** boost tamamlandı`,
+                    `🚀 Başarılı tokenler: **${successfulBoosts.length}** adet`
                 ].join('\n'))
-                .setColor('#34eb34')
-                .setTimestamp();
+                .setColor('#34eb34');
 
-            await interaction.followUp({ 
-                content: 'Boost işlemi tamamlandı!',
-                embeds: [completionEmbed],
-            });
+            await interaction.followUp({ embeds: [completionEmbed] });
 
         } catch (error) {
             console.error('[HATA]', error);
-
             const errorEmbed = new Discord.EmbedBuilder()
                 .setTitle('❌ İşlem Başarısız')
                 .setDescription(`\`\`\`${error.message}\`\`\``)
                 .setColor('#e74c3c');
-
-            await interaction.editReply({ 
-                embeds: [errorEmbed]
-            });
+            await interaction.editReply({ embeds: [errorEmbed] });
         }
     }
 };
-
-async function boostServer(token, guildId) {
-    try {
-        const response = await fetch('https://discord.com/api/v9/users/@me/guilds/premium/subscription-slots', {
-            headers: {
-                'Authorization': token,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const slots = await response.json();
-        if (!Array.isArray(slots) || slots.length < 2) {
-            console.log(`[Boost] Not enough boost slots. Found: ${slots.length}, Need: 2`);
-            return 0;
-        }
-
-        let successCount = 0;
-        // Try to boost twice with this token
-        for (let i = 0; i < 2; i++) {
-            const result = await fetch(`https://discord.com/api/v9/guilds/${guildId}/premium/subscriptions`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': token,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    user_premium_guild_subscription_slot_ids: [slots[i].id]
-                })
-            });
-
-            if (result.status === 201) {
-                console.log(`[Boost] Successfully boosted ${successCount + 1}/2 with token`);
-                successCount++;
-            } else {
-                console.log(`[Boost] Error: ${result.status}`);
-            }
-            await new Promise(r => setTimeout(r, 300));
-        }
-        return successCount;
-    } catch (error) {
-        console.error('[Boost Error]:', error);
-        return 0;
-    }
-}
