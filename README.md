@@ -31,9 +31,8 @@
    npm i
    ```
 
-3. Token Sistemi:
-   - `/tokens/online.txt` → Online üye tokenları
-   - `/tokens/offline.txt` → Offline üye tokenları
+3. Token Sistemi
+   - `/tokens/tokenler.txt` → boost tokenları
    - Her satıra bir token gelecek şekilde düzenleyin
 
 4. Veritabanı Yapısı:
