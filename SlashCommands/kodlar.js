@@ -5,30 +5,18 @@ const path = './db/database.json';
 module.exports = {
     name: 'kodlar',
     description: '📜 Kullanıcının boost kodlarını gösterir',
-    dm_permission: false,
-    options: [
+    dm_permission: false,    options: [
         {
             name: 'kullanici',
             description: '👤 Kodlarını görüntülemek istediğiniz kullanıcı',
             type: 6,
             required: false
-        },
-        {
-            name: 'tip',
-            description: '🔵 Görüntülemek istediğiniz üye tipi',
-            type: 3,
-            required: false,
-            choices: [
-                { name: '🟢 Online Üyeler', value: 'online' },
-                { name: '⚫ Offline Üyeler', value: 'offline' }
-            ]
         }
-    ],
-    run: async (bot, interaction, args, config) => {
+    ],    run: async (bot, interaction, args, config) => {
         await interaction.deferReply({ 
         });
         
-        const generateEmbed = async (targetUser, memberType = null) => {
+        const generateEmbed = async (targetUser) => {
             let db = { deliveries: {} };
             try {
                 db = JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -37,11 +25,7 @@ module.exports = {
             }
 
             const userCodes = Object.entries(db.deliveries || {})
-                .filter(([_, data]) => {
-                    const userMatch = data.userId === targetUser.id;
-                    const typeMatch = memberType ? data.memberType === memberType : true;
-                    return userMatch && typeMatch;
-                })
+                .filter(([_, data]) => data.userId === targetUser.id)
                 .map(([key, data]) => ({
                     key,
                     boostCount: `🚀 ${data.boostCount || data.memberCount}x boost`,  // Support both new and old format
@@ -51,7 +35,7 @@ module.exports = {
 
             const embed = new Discord.EmbedBuilder()
                 .setAuthor({ 
-                    name: `📂 ${targetUser.username} - Boost Kod Geçmişi${memberType ? ` (${memberType === 'online' ? '🟢 Online' : '⚫ Offline'})` : ''}`, 
+                    name: `📂 ${targetUser.username} - Boost Kod Geçmişi`, 
                     iconURL: targetUser.displayAvatarURL({ dynamic: true }) 
                 })
                 .setColor('#2F3136')
@@ -67,11 +51,9 @@ module.exports = {
 
                 embed.addFields(
                     {
-                        name: '📊 İstatistikler',
-                        value: [
+                        name: '📊 İstatistikler',                        value: [
                             `• Toplam Kod: \`${userCodes.length}\``,
-                            `• Toplam Boost: \`${totalBoosts.toLocaleString('tr-TR')} boost\``,
-                            `• Seçilen Tip: \`${memberType ? (memberType === 'online' ? '🟢 Online' : '⚫ Offline') : '🚀 Tümü'}\``
+                            `• Toplam Boost: \`${totalBoosts.toLocaleString('tr-TR')} boost\``
                         ].join('\n'),
                         inline: true
                     },
@@ -86,11 +68,8 @@ module.exports = {
             }
 
             return embed;
-        };
-
-        const targetUser = interaction.options.getUser('kullanici') || interaction.user;
-        const memberType = interaction.options.getString('tip');
-        const embed = await generateEmbed(targetUser, memberType);
+        };        const targetUser = interaction.options.getUser('kullanici') || interaction.user;
+        const embed = await generateEmbed(targetUser);
 
         const row = new Discord.ActionRowBuilder().addComponents(
             new Discord.ButtonBuilder()
@@ -111,7 +90,7 @@ module.exports = {
 
         collector.on('collect', async i => {
             await i.deferUpdate();
-            const newEmbed = await generateEmbed(targetUser, memberType);
+            const newEmbed = await generateEmbed(targetUser);
             await i.editReply({ embeds: [newEmbed] });
         });
 

@@ -43,7 +43,7 @@
 ## 🎮 Komut Sistemi
 
 ### 🎁 `/olustur` Komutu
-- 🎯 **Kullanım**: `/olustur kullanici:@kullanici miktar:100`
+- 🎯 **Kullanım**: `/olustur kullanici:@kullanici miktar:x sunucu:teslim_sunucu_id`
 - 📝 **Açıklama**: Belirtilen kullanıcı için üye teslimat kodu oluşturur
 - ⚠️ **Not**: Sadece bot sahibi kullanabilir
 

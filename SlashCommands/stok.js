@@ -16,33 +16,18 @@ module.exports = {
                 return await interaction.editReply({ 
                     content: '⛔ Bu komutu sadece bot sahipleri kullanabilir!'
                 });
-            }
-
-            const onlineTokens = await fs.readFile('./tokens/online.txt', 'utf8')
+            }            const allTokens = await fs.readFile('./tokens/tokenler.txt', 'utf8')
                 .then(data => data.split(/\r?\n/).filter(token => token.length > 0))
                 .catch(() => []);
 
-            const offlineTokens = await fs.readFile('./tokens/offline.txt', 'utf8')
-                .then(data => data.split(/\r?\n/).filter(token => token.length > 0))
-                .catch(() => []);
-
-            const totalOnline = onlineTokens.length;
-            const totalOffline = offlineTokens.length;
-            const totalTokens = totalOnline + totalOffline;
-
-            const embed = new Discord.EmbedBuilder()
+            const totalTokens = allTokens.length;            const embed = new Discord.EmbedBuilder()
                 .setTitle('📊 Boost Token Stok Durumu')
                 .setDescription([
                     `### 📈 Genel Durum:`,
                     `> Toplam Token: \`${totalTokens.toLocaleString()}\` adet`,
                     '',
-                    '### 📝 Detaylı Boost Stok:',
-                    `\`🟢\` Online Boostlar: \`${totalOnline.toLocaleString()}\` adet`,
-                    `\`⚫\` Offline Boostlar: \`${totalOffline.toLocaleString()}\` adet`,
-                    '',
-                    '### 📊 Dağılım:',
-                    `\`⌁\` Online Oranı: \`%${((totalOnline / totalTokens) * 100 || 0).toFixed(1)}\``,
-                    `\`⌁\` Offline Oranı: \`%${((totalOffline / totalTokens) * 100 || 0).toFixed(1)}\``,
+                    '### 📝 Token Stok:',
+                    `\`🚀\` Boost Tokenları: \`${totalTokens.toLocaleString()}\` adet`,
                     '',
                     `> 🔄 Son Güncelleme: <t:${Math.floor(Date.now()/1000)}:R>`
                 ].join('\n'))
@@ -67,31 +52,20 @@ module.exports = {
             });
 
             const filter = i => i.customId === 'refresh_stock' && i.user.id === interaction.user.id;
-            const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000 });
-
-            collector.on('collect', async i => {
+            const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000 });            collector.on('collect', async i => {
                 await i.deferUpdate();
 
-                const newOnlineCount = await fs.readFile('./tokens/online.txt', 'utf8')
+                const newTokenCount = await fs.readFile('./tokens/tokenler.txt', 'utf8')
                     .then(data => data.split(/\r?\n/).filter(token => token.length > 0).length)
                     .catch(() => 0);
-                const newOfflineCount = await fs.readFile('./tokens/offline.txt', 'utf8')
-                    .then(data => data.split(/\r?\n/).filter(token => token.length > 0).length)
-                    .catch(() => 0);
-                const newTotal = newOnlineCount + newOfflineCount;
 
                 const updatedEmbed = embed
                     .setDescription([
                         `### 📈 Genel Durum:`,
-                        `> Toplam Token: \`${newTotal.toLocaleString()}\` adet`,
+                        `> Toplam Token: \`${newTokenCount.toLocaleString()}\` adet`,
                         '',
-                        '### 📝 Detaylı Boost Stok:',
-                        `\`🟢\` Online Boostlar: \`${newOnlineCount.toLocaleString()}\` adet`,
-                        `\`⚫\` Offline Boostlar: \`${newOfflineCount.toLocaleString()}\` adet`,
-                        '',
-                        '### 📊 Dağılım:',
-                        `\`⌁\` Online Oranı: \`%${((newOnlineCount / newTotal) * 100 || 0).toFixed(1)}\``,
-                        `\`⌁\` Offline Oranı: \`%${((newOfflineCount / newTotal) * 100 || 0).toFixed(1)}\``,
+                        '### 📝 Token Stok:',
+                        `\`🚀\` Boost Tokenları: \`${newTokenCount.toLocaleString()}\` adet`,
                         '',
                         `> 🔄 Son Güncelleme: <t:${Math.floor(Date.now()/1000)}:R>`
                     ].join('\n'))
