@@ -20,7 +20,8 @@ module.exports = {
                 .then(data => data.split(/\r?\n/).filter(token => token.length > 0))
                 .catch(() => []);
 
-            const totalTokens = allTokens.length;            const embed = new Discord.EmbedBuilder()
+            const totalTokens = allTokens.length;            
+            const embed = new Discord.EmbedBuilder()
                 .setTitle('📊 Boost Token Stok Durumu')
                 .setDescription([
                     `### 📈 Genel Durum:`,
@@ -52,7 +53,8 @@ module.exports = {
             });
 
             const filter = i => i.customId === 'refresh_stock' && i.user.id === interaction.user.id;
-            const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000 });            collector.on('collect', async i => {
+            const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000 });            
+            collector.on('collect', async i => {
                 await i.deferUpdate();
 
                 const newTokenCount = await fs.readFile('./tokens/tokenler.txt', 'utf8')
